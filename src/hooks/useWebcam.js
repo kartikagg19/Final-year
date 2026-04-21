@@ -14,10 +14,10 @@ export function useWebcam(enabled) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error("Your browser does not support media devices. Please use a modern browser.");
         }
-
+        
         const s = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: true
+          audio: false
         });
         
         currentStream = s;
