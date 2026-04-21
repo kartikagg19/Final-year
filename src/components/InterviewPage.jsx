@@ -113,7 +113,11 @@ export default function InterviewPage({ config, user, onFinish }) {
     recognition.onresult = (event) => {
       let transcript = "";
       for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript + " ";
+        // Only append final sentences, or the absolute latest interim string.
+        // This prevents buggy browsers from duplicating interim phrases endlessly.
+        if (event.results[i].isFinal || i === event.results.length - 1) {
+          transcript += event.results[i][0].transcript + " ";
+        }
       }
       setAnswerDraft(transcript.trim());
     };
