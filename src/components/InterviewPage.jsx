@@ -89,6 +89,12 @@ export default function InterviewPage({ config, user, onFinish }) {
   }
 
   // 🎙️ Setup browser speech recognition (your voice -> text)
+  const answerDraftRef = useRef("");
+  
+  useEffect(() => {
+    answerDraftRef.current = answerDraft;
+  }, [answerDraft]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -112,32 +118,62 @@ export default function InterviewPage({ config, user, onFinish }) {
       setAnswerDraft(transcript.trim());
     };
 
-    recognition.onerror = () => setIsRecording(false);
-    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = (e) => {
+      console.error("Speech recognition error:", e.error, e.message);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Auto-submit when speech recognition ends (either manually or by auto-pause)
+      const finalDraft = answerDraftRef.current.trim();
+      if (finalDraft && !isThinkingRef.current) {
+         handleSubmitAnswerRef.current(finalDraft);
+      }
+    };
 
     recognitionRef.current = recognition;
 
     return () => recognition.stop();
   }, []);
 
+  const isThinkingRef = useRef(isThinking);
+  useEffect(() => {
+    isThinkingRef.current = isThinking;
+  }, [isThinking]);
+
+  const handleSubmitAnswerRef = useRef(null);
+  useEffect(() => {
+    handleSubmitAnswerRef.current = async (draftValue) => {
+      if (!draftValue || isThinking) return;
+      
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      
+      setAnswerDraft("");
+      answerDraftRef.current = "";
+      await answerQuestion(draftValue);
+    };
+  }, [isThinking, answerQuestion]);
+
   async function handleSubmitAnswer() {
-    if (!answerDraft.trim() || isThinking) return;
+    const draft = answerDraftRef.current.trim();
+    if (!draft || isThinking) return;
     
     if (isRecording && recognitionRef.current) {
         recognitionRef.current.stop();
         setIsRecording(false);
+    } else {
+        handleSubmitAnswerRef.current(draft);
     }
-    
-    // Stop TTS so we're ready for next question immediately.
-    if(window.speechSynthesis) window.speechSynthesis.cancel();
-    
-    await answerQuestion(answerDraft.trim());
-    setAnswerDraft("");
   }
 
   function handleEnd() {
     if(window.speechSynthesis) window.speechSynthesis.cancel();
-    if(isRecording && recognitionRef.current) recognitionRef.current.stop();
+    if(isRecording && recognitionRef.current) {
+        // Prevent auto-submit if we are manually ending the whole interview
+        answerDraftRef.current = ""; 
+        recognitionRef.current.stop();
+    }
     const fb = finish();
     onFinish({ answers, feedback: fb });
   }
@@ -151,11 +187,12 @@ export default function InterviewPage({ config, user, onFinish }) {
       setIsRecording(false);
     } else {
       setAnswerDraft(""); 
+      answerDraftRef.current = "";
       try {
         recognition.start();
         setIsRecording(true);
       } catch (e) {
-        console.error("Speech recognition start error", e);
+        console.error("Speech recognition start error:", e);
       }
     }
   }
